@@ -32,6 +32,7 @@
 // Prototypes
 void die(const char *message);
 std::vector<char> modMessage(char rcvBuff[MESSAGESIZE]);
+bool talkToClient(SOCKET clientSocket);
 
 int main()
 {
@@ -95,7 +96,7 @@ int main()
 
 	if (bindAddr != 0)
 	{
-		die("bind failed");
+		die("server bind failed");
 	}
 
 	// ntohs does the opposite of htons.
@@ -139,91 +140,19 @@ int main()
 			// print error msg
 			printf("\n#### Accepting client failed! ####\n\n");
 
+			// Just try again
+			continue;
+
+			// Or run this code if you want to exit upon fail
 			// close server socket, then break from loop
 			// which closes server socket and cleans up.
-			printf("Closing server socket...\n");
-			break;
+			/*printf("Closing server socket...\n");
+			break;*/
 		}
 
 		printf("Client has connected from IP address %s, port %d!\n", inet_ntoa(clientAddr.sin_addr), ntohs(clientAddr.sin_port));
 
-		// We'll use this array to hold the messages we exchange with the client.
-		char rcvBuffer[MESSAGESIZE];
-
-		// Fill the buffer with - characters to start with.
-		memset(rcvBuffer, '-', MESSAGESIZE);
-
-		// Send a welcome message to the client.
-		memcpy(rcvBuffer, WELCOME, strlen(WELCOME));
-		int welcomeMsg = send(clientSocket, rcvBuffer, MESSAGESIZE, 0);
-
-		// FIXME: check for errors from send
-		// ############# FIXED #############
-		if (welcomeMsg == SOCKET_ERROR)
-		{
-			die("welcome message send error");
-		}
-
-		bool flag = false;
-
-		while (true)
-		{
-			// Receive as much data from the client as will fit in the buffer.
-			int count = recv(clientSocket, rcvBuffer, MESSAGESIZE, 0);
-
-			// FIXME: check for errors from recv
-			// ############# FIXED #############
-			if (count == SOCKET_ERROR)
-			{
-				die("message recv error");
-			}
-
-			if (count <= 0)
-			{
-				printf("Client closed connection\n");
-				flag = true;
-				break;
-			}
-
-			if (count != MESSAGESIZE)
-			{
-				die("Got strange-sized message from client");
-			}
-
-			if (memcmp(rcvBuffer, "quit", 4) == 0)
-			{
-				printf("Client asked to quit\n");
-				flag = true;
-				break;
-			}
-
-			// (Note that recv will not write a \0 at the end of the message it's
-			// received -- so we can't just use it as a C-style string directly
-			// without writing the \0 ourself.)
-
-			printf("Received %d bytes from the client: '", count);
-			fwrite(rcvBuffer, 1, count, stdout);
-
-			std::vector<char> rcvBuffVec =  modMessage(rcvBuffer);
-
-			// Copy from the modified vec back into the rcvBuffer object.
-			for (int i = 0; i < rcvBuffVec.size(); ++i)
-			{
-				rcvBuffer[i] = rcvBuffVec[i];
-			}
-
-			printf("'\n");
-
-			// Send the same data back to the client.
-			int reply = send(clientSocket, rcvBuffer, MESSAGESIZE, 0);
-
-			// FIXME: check for errors from send
-			// ############# FIXED #############
-			if (reply == SOCKET_ERROR)
-			{
-				die("echo send error, server side");
-			}
-		}
+		bool flag = talkToClient(clientSocket);
 
 		if (flag)
 		{
@@ -237,6 +166,94 @@ int main()
 	WSACleanup();
 	printf("Quitting...\n");
 	return 0;
+}
+
+bool talkToClient(SOCKET clientSocket)
+{
+	// We'll use this array to hold the messages we exchange with the client.
+	char rcvBuffer[MESSAGESIZE];
+
+	// Fill the buffer with - characters to start with.
+	memset(rcvBuffer, '-', MESSAGESIZE);
+
+	// Send a welcome message to the client.
+	memcpy(rcvBuffer, WELCOME, strlen(WELCOME));
+	int welcomeMsg = send(clientSocket, rcvBuffer, MESSAGESIZE, 0);
+
+	// FIXME: check for errors from send
+	// ############# FIXED #############
+	if (welcomeMsg == SOCKET_ERROR)
+	{
+		die("welcome message send error");
+	}
+
+	bool flag = false;
+
+	while (true)
+	{
+		// Receive as much data from the client as will fit in the buffer.
+		int count = recv(clientSocket, rcvBuffer, MESSAGESIZE, 0);
+
+		// FIXME: check for errors from recv
+		// ############# FIXED #############
+		if (count == SOCKET_ERROR)
+		{
+			die("message recv error");
+		}
+
+		if (count <= 0)
+		{
+			printf("Client closed connection\n");
+			flag = true;
+			break;
+		}
+
+		if (count != MESSAGESIZE)
+		{
+			die("Got strange-sized message from client");
+		}
+
+		if (memcmp(rcvBuffer, "quit", 4) == 0)
+		{
+			printf("Client asked to quit\n");
+			flag = true;
+			break;
+		}
+
+		// (Note that recv will not write a \0 at the end of the message it's
+		// received -- so we can't just use it as a C-style string directly
+		// without writing the \0 ourself.)
+
+		printf("Received %d bytes from the client: '", count);
+		fwrite(rcvBuffer, 1, count, stdout);
+
+		std::vector<char> rcvBuffVec = modMessage(rcvBuffer);
+
+		// Copy from the modified vec back into the rcvBuffer object.
+		for (int i = 0; i < rcvBuffVec.size(); ++i)
+		{
+			rcvBuffer[i] = rcvBuffVec[i];
+		}
+
+		printf("'\n");
+
+		// Send the same data back to the client.
+		int reply = send(clientSocket, rcvBuffer, MESSAGESIZE, 0);
+
+		// FIXME: check for errors from send
+		// ############# FIXED #############
+		if (reply == SOCKET_ERROR)
+		{
+			die("echo send error, server side");
+		}
+	}
+
+	if (flag)
+	{
+		return true;
+	}
+
+	return false;
 }
 
 std::vector<char> modMessage(char rcvBuff[MESSAGESIZE])
